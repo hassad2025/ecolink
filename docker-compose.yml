@@ -1,0 +1,72 @@
+services:
+
+  # ── Frontend Next.js ──────────────────────────────────
+  frontend:
+    build:
+      context: ./ecolink-frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+        NEXT_PUBLIC_SITE_URL: https://ecolink.fr
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # ── Backend FastAPI ────────────────────────────────────
+  backend:
+    build:
+      context: ./ecolink-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=mysql+pymysql://root:@db:3306/ecolink_db
+      - SMTP_HOST=smtp.gmail.com
+      - SMTP_PORT=587
+      - SMTP_USER=hassadakedjou910@gmail.com
+      - SMTP_PASSWORD=ozhipujocgaegyfo
+      - SMTP_FROM_EMAIL=hassadakedjou910@gmail.com
+      - SMTP_USE_TLS=true
+      - JWT_SECRET=ton_secret_jwt_super_secret
+      - JWT_REFRESH_SECRET=ton_secret_refresh_jwt_super_secret
+      - JWT_ALGORITHM=HS256
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Base de données MySQL ──────────────────────────────
+  db:
+    image: mysql:8.0
+    ports:
+      - "3307:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=
+      - MYSQL_ALLOW_EMPTY_PASSWORD=yes
+      - MYSQL_DATABASE=ecolink_db
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Stockage MinIO ─────────────────────────────────────
+  minio:
+    image: minio/minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  minio_data:

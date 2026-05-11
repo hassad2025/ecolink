@@ -1,0 +1,86 @@
+name: EcoLink CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+
+  # ── Job 1 : Lint + Build Frontend ─────────────────────
+  build-frontend:
+    name: Lint & Build Next.js
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+          cache-dependency-path: ecolink-frontend/package-lock.json
+
+      - name: Installer les dépendances
+        working-directory: ecolink-frontend
+        run: npm ci
+
+      - name: Lint ESLint
+        working-directory: ecolink-frontend
+        run: npm run lint
+
+      - name: Build Next.js
+        working-directory: ecolink-frontend
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000
+          NEXT_PUBLIC_SITE_URL: https://ecolink.fr
+        run: npm run build
+
+  # ── Job 2 : Tests Backend ──────────────────────────────
+  build-backend:
+    name: Test Backend FastAPI
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Installer les dépendances
+        working-directory: ecolink-backend
+        run: pip install -r requirements.txt
+
+  # ── Job 3 : Build Docker (main seulement) ─────────────
+  docker:
+    name: Build images Docker
+    runs-on: ubuntu-latest
+    needs: [build-frontend, build-backend]
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Build image Frontend
+        run: |
+          docker build \
+            --build-arg NEXT_PUBLIC_API_URL=https://api.ecolink.fr \
+            --build-arg NEXT_PUBLIC_SITE_URL=https://ecolink.fr \
+            -t ecolink-frontend:latest \
+            ./ecolink-frontend
+
+      - name: Build image Backend
+        run: |
+          docker build \
+            -t ecolink-backend:latest \
+            ./ecolink-backend
+
+      - name: Vérifier les images
+        run: docker images | grep ecolink
